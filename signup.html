@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Create Account</title>
+
+<!-- Firebase Scripts -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<style>
+body { background-color: whitesmoke; font-family: Arial; }
+input { padding: 10px; width: 250px; margin: 8px; }
+input[type="submit"] { background: blue; color: white; cursor: pointer; }
+</style>
+
+</head>
+<body>
+
+<h2 align="center">Create New Account</h2>
+
+<form onsubmit="return signup()" align="center">
+    USERNAME:<br>
+    <input id="username" type="text" placeholder="Enter username"><br><br>
+
+    EMAIL:<br>
+    <input id="email" type="text" placeholder="Enter email"><br><br>
+
+    PASSWORD:<br>
+    <input id="pass" type="password" placeholder="Enter password (min 6 chars)"><br><br>
+
+    <input type="submit" value="Create Account"><br><br>
+
+    <a href="loginform.html">Back to Login</a>
+</form>
+
+<script>
+// Firebase config
+  const firebaseConfig = {
+    apiKey: "AIzaSyAlAT2IBGRo0pTlrfK6QqmIx368UcyFZqI",
+    authDomain: "school-web-9599f.firebaseapp.com",
+    projectId: "school-web-9599f",
+    storageBucket: "school-web-9599f.firebasestorage.app",
+    messagingSenderId: "941617380658",
+    appId: "1:941617380658:web:411a50d9d350638b0dab2b",
+    measurementId: "G-QMTK4DC6LP"
+  };
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+</script>
+
+<script>
+// SIGNUP FUNCTION
+function signup() {
+    const username = document.getElementById("username").value;
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("pass").value;
+
+    if (!username || !email || !password) {
+        alert("All fields are required");
+        return false;
+    }
+
+    auth.createUserWithEmailAndPassword(email, password)
+    .then((userCredential) => {
+        const uid = userCredential.user.uid;
+
+        // Save username in Firestore
+        return db.collection("users").doc(uid).set({
+            username: username,
+            email: email
+        });
+    })
+    .then(() => {
+        alert("Account Created Successfully!");
+        window.location.href = "loginform.html";
+    })
+    .catch((error) => {
+        alert(error.message);
+    });
+
+    return false;
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Forgot Password</title>
+    <style>
+        body {
+            background-color: whitesmoke;
+            font-family: Arial;
+        }
+        form {
+            width: 300px;
+            margin: auto;
+            margin-top: 50px;
+            padding: 20px;
+            background: white;
+            border-radius: 6px;
+            box-shadow: 0px 0px 10px lightgray;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 8px 0;
+            border: 1px solid black;
+            border-radius: 4px;
+        }
+        input[type="submit"] {
+            background-color: red;
+            color: white;
+            cursor: pointer;
+        }
+        h2 {
+            text-align: center;
+        }
+    </style>
+
+    <script>
+        function resetPassword() {
+            let email = document.getElementById("email").value;
+
+            if (email === "") {
+                alert("Please enter your email!");
+                return false;
+            }
+
+            alert("Password reset link is sent to your email!");
+            return true;
+        }
+    </script>
+</head>
+<body>
+
+<form onsubmit="return resetPassword()" action="loginform.html">
+    <h2>Forgot Password</h2>
+
+    <input id="email" type="text" placeholder="Enter Registered Email">
+
+    <input type="submit" value="Send Reset Link">
+
+    <a href="loginform.html">Back to Login</a>
+</form>
+
+</body>
+</html>
