@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Attendance</title>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+</head>
+<body>
+  <h2>Attendance</h2>
+  <label>Class<input id="classForAttendance" value="8-A"></label>
+  <div id="studentsList"></div>
+  <button id="saveAttendance">Save</button>
+
+  <script>
+    async function loadClassStudents(cls) {
+      // simple: read admissions for the class and list
+      const snap = await db.collection('admissions').where('sclass','==',cls).get();
+      const container = document.getElementById('studentsList'); container.innerHTML = '';
+      snap.forEach(doc => {
+        const d = doc.data();
+        const div = document.createElement('div');
+        div.innerHTML = `<label><input type="checkbox" data-uid="${doc.id}" checked> ${d.name || '(unknown)'}</label>`;
+        container.appendChild(div);
+      });
+    }
+    document.getElementById('classForAttendance').addEventListener('change', ()=>loadClassStudents(document.getElementById('classForAttendance').value));
+    document.getElementById('saveAttendance').addEventListener('click', async ()=>{
+      const cls = document.getElementById('classForAttendance').value;
+      const checked = [...document.querySelectorAll('#studentsList input[type=checkbox]')].filter(i=>i.checked).map(i=>i.dataset.uid);
+      const docId = `${cls}-${new Date().toISOString().slice(0,10)}`;
+      await db.collection('attendance').doc(docId).set({
+        class: cls, date: firebase.firestore.FieldValue.serverTimestamp(), present: checked, createdBy: auth.currentUser.uid
+      });
+      alert('Attendance saved');
+    });
+    // init
+    auth.onAuthStateChanged(u => { if(!u) location.href='loginform.html'; else loadClassStudents(document.getElementById('classForAttendance').value); });
+  </script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Admin</title>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+</head>
+<body>
+  <h1>Admin Dashboard</h1>
+  <button id="logout">Logout</button>
+  <div id="summary"></div>
+  <input id="search" placeholder="Search name/phone"><button id="doSearch">Search</button>
+  <table id="adminTable" border="1"><thead><tr><th>#</th><th>Name</th><th>Phone</th><th>Class</th><th>Actions</th></tr></thead><tbody></tbody></table>
+
+  <script>
+    async function ensureAdmin() {
+      const u = auth.currentUser; if(!u) return location.href='loginform.html';
+      const ud = (await db.collection('users').doc(u.uid).get()).data();
+      if(!ud || ud.role !== 'admin') { alert('Admin only'); return location.href='students.html'; }
+    }
+    async function loadAll(q='') {
+      await ensureAdmin();
+      const tbody = document.querySelector('#adminTable tbody');
+      tbody.innerHTML = '';
+      const snap = await db.collection('admissions').orderBy('createdAt','desc').get();
+      let i=0; snap.forEach(doc=>{
+        i++; const d=doc.data();
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${i}</td><td>${d.name||''}</td><td>${d.phone||''}</td><td>${d.sclass||''}</td>
+          <td><button onclick="openEdit('${doc.id}')">Edit</button>
+          <button onclick="deleteRec('${doc.id}')">Delete</button></td>`;
+        tbody.appendChild(tr);
+      });
+    }
+    function openEdit(id){ localStorage.setItem('loadStudentFirestore', JSON.stringify({id})); location.href='admissionform (1).html'; }
+    async function deleteRec(id){ if(!confirm('Delete?')) return; await db.collection('admissions').doc(id).delete(); alert('Deleted'); loadAll(); }
+
+    document.getElementById('doSearch').onclick = ()=>loadAll(document.getElementById('search').value);
+    document.getElementById('logout').onclick = ()=>auth.signOut().then(()=>location.href='loginform.html');
+    auth.onAuthStateChanged(u => { if(!u) location.href='loginform.html'; else loadAll(); });
+  </script>
+</body>
+</html>

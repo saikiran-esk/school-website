@@ -1,247 +1,64 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-<meta charset="UTF-8">
-<title>Progress Report – Final Marks (Out of 100)</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-
-<style>
-  body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background: linear-gradient(135deg, #1e3a8a, #0f172a);
-    color: #fff;
-    padding: 20px;
-  }
-  .container {
-    max-width: 1100px;
-    margin: auto;
-    background: rgba(255,255,255,0.1);
-    padding: 20px;
-    border-radius: 12px;
-    backdrop-filter: blur(5px);
-  }
-  h1 { text-align: center; }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 15px;
-    background: rgba(255,255,255,0.15);
-  }
-  th, td {
-    padding: 10px;
-    text-align: center;
-    border-bottom: 1px solid rgba(255,255,255,0.2);
-  }
-  th {
-    background: rgba(255,255,255,0.2);
-    font-size: 14px;
-  }
-  input {
-    width: 60px;
-    padding: 6px;
-    border-radius: 5px;
-    border: none;
-    text-align: center;
-  }
-  select, #studentName {
-    padding: 6px;
-    margin-left: 10px;
-    border-radius: 6px;
-    border: none;
-  }
-  .summary {
-    margin-top: 20px;
-    display: flex;
-    justify-content: flex-end;
-    gap: 15px;
-  }
-  .box {
-    background: rgba(255,255,255,0.2);
-    padding: 10px 14px;
-    border-radius: 8px;
-    font-weight: bold;
-  }
-</style>
+  <meta charset="utf-8">
+  <title>Progress</title>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
 </head>
-
 <body>
-<div class="container">
+  <h2>Progress / Marks</h2>
+  <label>Student Name<input id="studentName"></label><br>
+  <label>Class<input id="classSelect"></label><br>
 
-<h1>Progress Report – Final Marks (Out of 100)</h1>
+  <table id="subjectRows" border="1">
+    <tr><th>Subject</th><th>FA</th><th>SA</th></tr>
+    <tr><td class="sub">Math</td><td><input class="fa" type="number" value="0"></td><td><input class="sa" type="number" value="0"></td></tr>
+    <tr><td class="sub">Science</td><td><input class="fa" type="number" value="0"></td><td><input class="sa" type="number" value="0"></td></tr>
+    <tr><td class="sub">English</td><td><input class="fa" type="number" value="0"></td><td><input class="sa" type="number" value="0"></td></tr>
+  </table>
 
-<!-- Print & PDF Buttons -->
-<div style="margin-top:15px; text-align:right;">
-  <button onclick="window.print()" 
-    style="padding:10px 18px;border:none;background:#38bdf8;color:#000;font-weight:bold;border-radius:6px;cursor:pointer;margin-right:10px;">
-    Print
-  </button>
+  <button id="saveMarks">Save Marks</button>
+  <button id="loadRecent">Load Recent</button>
 
-  <button onclick="downloadPDF()" 
-    style="padding:10px 18px;border:none;background:#34d399;color:#000;font-weight:bold;border-radius:6px;cursor:pointer;">
-    Download PDF
-  </button>
-</div>
+  <script>
+    document.getElementById('saveMarks').addEventListener('click', async ()=>{
+      const user = auth.currentUser; if(!user) return location.href='loginform.html';
+      const rows = document.querySelectorAll('#subjectRows tr');
+      const marks = [];
+      for (let i=1;i<rows.length;i++){
+        const r = rows[i];
+        const subject = r.querySelector('.sub').textContent.trim();
+        const fa = Number(r.querySelector('.fa').value)||0;
+        const sa = Number(r.querySelector('.sa').value)||0;
+        marks.push({ subject, fa, sa, total: fa+sa });
+      }
+      const finalPercent = marks.reduce((s,m)=>s+m.total,0)/(marks.length*100)*100;
+      await db.collection('progress').add({
+        studentName: document.getElementById('studentName').value || '',
+        class: document.getElementById('classSelect').value || '',
+        marks, finalPercent, createdBy: user.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      alert('Saved marks');
+    });
 
-<!-- Student and Class Selection -->
-<div style="margin-top: 20px;">
-  Student: <input type="text" id="studentName" placeholder="Enter name" required>
-  Class:
-  <select id="classSelect">
-    <option value="6">6</option>
-    <option value="7">7</option>
-    <option value="8">8</option>
-    <option value="9">9</option>
-    <option value="10">10</option>
-  </select>
-</div>
-
-<!-- Marks Table -->
-<table>
-  <thead>
-    <tr>
-      <th>S.No</th>
-      <th>Subject</th>
-      <th colspan="4">FA Marks</th>
-      <th>FA Raw</th>
-      <th colspan="3">SA Marks</th>
-      <th>SA Raw</th>
-      <th>FA (50)</th>
-      <th>SA (50)</th>
-      <th>Final (100)</th>
-    </tr>
-    <tr>
-      <th></th><th></th>
-      <th>FA1</th><th>FA2</th><th>FA3</th><th>FA4</th>
-      <th></th>
-      <th>SA1</th><th>SA2</th><th>SA3</th>
-      <th></th><th></th><th></th><th></th>
-    </tr>
-  </thead>
-
-  <tbody id="subjectRows"></tbody>
-</table>
-
-<div class="summary" id="summaryArea"></div>
-
-</div>
-
-<!-- PDF Library -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-
-<script>
-// Subjects
-const subjectsLow = ["TELUGU","HINDI","ENGLISH","MATHEMATICS","SCIENCE","SOCIAL"];
-const subjectsHigh = ["TELUGU","HINDI","ENGLISH","MATHEMATICS","PHYSICS","BIOLOGY","SOCIAL"];
-
-// FIXED RAW MAX VALUES YOU GAVE
-const FA_RAW_MAX = 200;   // 50+50+50+50
-const SA_RAW_MAX = 300;   // 100+100+100
-
-const tbody = document.getElementById("subjectRows");
-const classSelect = document.getElementById("classSelect");
-const summaryArea = document.getElementById("summaryArea");
-
-// Build rows
-function buildRows() {
-  tbody.innerHTML = "";
-  const cls = parseInt(classSelect.value);
-
-  const subjects = (cls === 6 || cls === 7) ? subjectsLow : subjectsHigh;
-
-  subjects.forEach((sub, i) => {
-    const tr = document.createElement("tr");
-
-    tr.innerHTML = `
-      <td>${i+1}</td>
-      <td style="font-weight:bold; text-align:left;">${sub}</td>
-
-      <td><input class="fa"></td>
-      <td><input class="fa"></td>
-      <td><input class="fa"></td>
-      <td><input class="fa"></td>
-
-      <td class="faTotal">0</td>
-
-      <td><input class="sa"></td>
-      <td><input class="sa"></td>
-      <td><input class="sa"></td>
-
-      <td class="saTotal">0</td>
-
-      <td class="faScaled">0</td>
-      <td class="saScaled">0</td>
-      <td class="finalTotal">0</td>
-    `;
-
-    tbody.appendChild(tr);
-  });
-
-  tbody.querySelectorAll("input").forEach(inp => {
-    inp.addEventListener("input", recalcAll);
-  });
-}
-
-function recalcAll() {
-  const rows = tbody.querySelectorAll("tr");
-  let finalTotals = [];
-
-  rows.forEach(row => {
-    const faInputs = [...row.querySelectorAll(".fa")].map(x => parseFloat(x.value) || 0);
-    const saInputs = [...row.querySelectorAll(".sa")].map(x => parseFloat(x.value) || 0);
-
-    const faRaw = faInputs.reduce((a,b)=>a+b,0);
-    const saRaw = saInputs.reduce((a,b)=>a+b,0);
-
-    row.querySelector(".faTotal").textContent = faRaw.toFixed(2);
-    row.querySelector(".saTotal").textContent = saRaw.toFixed(2);
-
-    // Correct scaling
-    const faScaled = (faRaw / FA_RAW_MAX) * 50;
-    const saScaled = (saRaw / SA_RAW_MAX) * 50;
-
-    row.querySelector(".faScaled").textContent = faScaled.toFixed(2);
-    row.querySelector(".saScaled").textContent = saScaled.toFixed(2);
-
-    const final = faScaled + saScaled;
-
-    row.querySelector(".finalTotal").textContent = final.toFixed(2);
-
-    finalTotals.push(final);
-  });
-
-  updateSummary(finalTotals);
-}
-
-function updateSummary(finals) {
-  if (finals.length === 0) return;
-  const avg = finals.reduce((a,b)=>a+b,0) / finals.length;
-
-  summaryArea.innerHTML = `
-    <div class="box">Subjects: ${finals.length}</div>
-    <div class="box">Average (100): ${avg.toFixed(2)}</div>
-  `;
-}
-
-// PDF
-function downloadPDF() {
-  const element = document.querySelector('.container');
-
-  html2pdf().set({
-    margin: 0.5,
-    filename: (document.getElementById('studentName').value || 'Progress_Report') + '.pdf',
-    image: { type: 'jpeg', quality: 1 },
-    html2canvas: { scale: 2 },
-    jsPDF: { unit: 'in', format: 'A4', orientation: 'portrait' }
-  }).from(element).save();
-}
-
-// Events
-classSelect.addEventListener("change", buildRows);
-
-// Load initial rows
-buildRows();
-</script>
-
+    document.getElementById('loadRecent').addEventListener('click', async ()=>{
+      const user = auth.currentUser; if(!user) return location.href='loginform.html';
+      const snap = await db.collection('progress').where('createdBy','==',user.uid).orderBy('createdAt','desc').limit(1).get();
+      if (snap.empty) return alert('No marks saved');
+      const d = snap.docs[0].data();
+      document.getElementById('studentName').value = d.studentName || '';
+      document.getElementById('classSelect').value = d.class || '';
+      // fill table
+      for (let i=0;i<d.marks.length;i++){
+        const row = document.querySelectorAll('#subjectRows tr')[i+1];
+        if (!row) continue;
+        row.querySelector('.fa').value = d.marks[i].fa;
+        row.querySelector('.sa').value = d.marks[i].sa;
+      }
+    });
+  </script>
 </body>
 </html>
