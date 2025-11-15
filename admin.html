@@ -1,46 +1,434 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Admin</title>
+  <meta charset="utf-8" />
+  <title>Admin Dashboard — School</title>
+
+  <!-- Chart.js for charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Firebase (compat) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <!-- your shared firebase config (must be present in project root) -->
   <script src="firebase-config.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background:#f6f8fa; color:#111;}
+    header { background:#0b7a3e; color:#fff; padding:14px 20px; display:flex; align-items:center; gap:12px; }
+    header img { height:48px; }
+    .container { padding:18px; max-width:1200px; margin:0 auto; }
+    .row { display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+    .card { background:#fff; padding:14px; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,0.06); flex:1; min-width:220px; }
+    .card h3 { margin:0 0 8px 0; font-size:15px; color:#333; }
+    .toolbar { display:flex; gap:8px; align-items:center; }
+    input[type="search"], select { padding:8px 10px; border-radius:6px; border:1px solid #ddd; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; background:#fff; border-radius:8px; overflow:hidden; }
+    th, td { padding:8px 10px; text-align:left; border-bottom:1px solid #eee; font-size:14px; }
+    th { background:#fafafa; }
+    button { padding:8px 10px; border-radius:6px; border:0; cursor:pointer; }
+    .btn-green { background:#0b7a3e; color:#fff; }
+    .btn-red { background:#d9534f; color:#fff; }
+    .btn-gray { background:#f1f3f5; }
+    .muted { color:#666; font-size:13px; }
+    .table-actions button { margin-right:6px; }
+    .pagination { display:flex; gap:8px; margin-top:12px; align-items:center; }
+    .small { font-size:13px; color:#555; }
+    footer { text-align:center; padding:18px; color:#666; font-size:13px; margin-top:20px; }
+    canvas { background:#fff; border-radius:8px; padding:12px; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
+    @media (max-width:720px){ .row { flex-direction:column } table, th, td { font-size:13px } }
+  </style>
 </head>
 <body>
-  <h1>Admin Dashboard</h1>
-  <button id="logout">Logout</button>
-  <div id="summary"></div>
-  <input id="search" placeholder="Search name/phone"><button id="doSearch">Search</button>
-  <table id="adminTable" border="1"><thead><tr><th>#</th><th>Name</th><th>Phone</th><th>Class</th><th>Actions</th></tr></thead><tbody></tbody></table>
+  <header>
+    <img src="ap logo.png" alt="AP logo" />
+    <div>
+      <strong style="font-size:18px">Government School — Admin Dashboard</strong><br>
+      <span class="muted">Manage admissions, users, progress and reports</span>
+    </div>
+    <div style="margin-left:auto">
+      <button id="logoutBtn" class="btn-gray">Logout</button>
+    </div>
+  </header>
 
+  <div class="container">
+    <!-- Top statistics -->
+    <div class="row">
+      <div class="card">
+        <h3>Total Admissions</h3>
+        <div id="statTotal" style="font-size:28px; font-weight:700">—</div>
+        <div class="small">Total admission records in the system</div>
+      </div>
+      <div class="card">
+        <h3>Unique Students</h3>
+        <div id="statStudents" style="font-size:28px; font-weight:700">—</div>
+        <div class="small">Unique student entries</div>
+      </div>
+      <div class="card">
+        <h3>Recent (7d)</h3>
+        <div id="statRecent" style="font-size:28px; font-weight:700">—</div>
+        <div class="small">Admissions in the last 7 days</div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="row">
+      <div class="toolbar card" style="align-items:center;">
+        <input id="qSearch" type="search" placeholder="Search name / phone / class" style="width:360px">
+        <select id="classFilter"><option value="">All classes</option></select>
+        <select id="sortBy">
+          <option value="createdAt_desc">Newest</option>
+          <option value="createdAt_asc">Oldest</option>
+        </select>
+        <button id="doSearch" class="btn-green">Search</button>
+        <button id="exportCsv" class="btn-gray">Export CSV</button>
+        <button id="refreshBtn" class="btn-gray">Refresh</button>
+      </div>
+
+      <div class="card" style="min-width:240px">
+        <h3>Quick Actions</h3>
+        <div style="display:flex; gap:8px;">
+          <button id="goToSite" class="btn-gray">Open Live Site</button>
+          <button id="createUserBtn" class="btn-green">Create User</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main content: table + charts -->
+    <div class="row">
+      <div style="flex:2">
+        <div class="card">
+          <h3>Admissions</h3>
+          <div class="muted small">Showing <span id="resultCount">0</span> results</div>
+          <table id="admTable">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Class</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+
+          <div class="pagination">
+            <button id="prevPage" class="btn-gray">Prev</button>
+            <div class="small">Page <span id="pageNum">1</span></div>
+            <button id="nextPage" class="btn-gray">Next</button>
+            <div style="margin-left:auto" class="muted small">Page size:
+              <select id="pageSize">
+                <option>10</option><option>25</option><option>50</option>
+              </select>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div style="flex:1; display:flex; flex-direction:column; gap:12px;">
+        <div class="card">
+          <h3>Admissions by Class</h3>
+          <canvas id="chartClasses" width="400" height="250"></canvas>
+        </div>
+        <div class="card">
+          <h3>Marks overview (Latest)</h3>
+          <canvas id="chartMarks" width="400" height="250"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      Admin dashboard — manage users, admissions and reports. <span class="muted">Make sure you are an admin user.</span>
+    </footer>
+  </div>
+
+  <!-- Simple modal for create user (native prompt fallback) -->
   <script>
-    async function ensureAdmin() {
-      const u = auth.currentUser; if(!u) return location.href='loginform.html';
-      const ud = (await db.collection('users').doc(u.uid).get()).data();
-      if(!ud || ud.role !== 'admin') { alert('Admin only'); return location.href='students.html'; }
+  // Helper utilities
+  function esc(s){ if(s===undefined||s===null) return ''; return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])); }
+
+  // Globals
+  let currentUser = null;
+  let adminUid = null;
+  let lastQuerySnapshot = null;
+  let pageCursor = null;
+  let pageSize = Number(document.getElementById('pageSize').value) || 10;
+  let pageNum = 1;
+  let fetchedDocs = []; // holds currently visible docs (for CSV)
+  let classesSet = new Set();
+
+  // DOM refs
+  const tbody = document.querySelector('#admTable tbody');
+  const statTotal = document.getElementById('statTotal');
+  const statStudents = document.getElementById('statStudents');
+  const statRecent = document.getElementById('statRecent');
+  const resultCount = document.getElementById('resultCount');
+  const qSearch = document.getElementById('qSearch');
+  const classFilter = document.getElementById('classFilter');
+  const sortBy = document.getElementById('sortBy');
+  const pageNumEl = document.getElementById('pageNum');
+
+  // Charts
+  let chartClasses = null;
+  let chartMarks = null;
+
+  // ensure admin
+  async function ensureAdmin() {
+    currentUser = firebase.auth().currentUser;
+    if(!currentUser) {
+      // redirect to login
+      return window.location.href = 'loginform.html';
     }
-    async function loadAll(q='') {
-      await ensureAdmin();
-      const tbody = document.querySelector('#adminTable tbody');
-      tbody.innerHTML = '';
-      const snap = await db.collection('admissions').orderBy('createdAt','desc').get();
-      let i=0; snap.forEach(doc=>{
-        i++; const d=doc.data();
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${i}</td><td>${d.name||''}</td><td>${d.phone||''}</td><td>${d.sclass||''}</td>
-          <td><button onclick="openEdit('${doc.id}')">Edit</button>
-          <button onclick="deleteRec('${doc.id}')">Delete</button></td>`;
-        tbody.appendChild(tr);
+    adminUid = currentUser.uid;
+    const ud = await db.collection('users').doc(adminUid).get();
+    if(!ud.exists || ud.data().role !== 'admin') {
+      alert('Access denied. Admins only.');
+      return window.location.href = 'students.html';
+    }
+    // OK to load dashboard
+  }
+
+  // load top stats
+  async function loadStats() {
+    const snap = await db.collection('admissions').get();
+    statTotal.textContent = snap.size;
+    // count unique students by name+phone
+    const set = new Set();
+    snap.forEach(d => {
+      const dt = d.data();
+      set.add((dt.name||'') + '|' + (dt.phone||''));
+    });
+    statStudents.textContent = set.size;
+
+    // recent 7 days
+    const seven = new Date(); seven.setDate(seven.getDate()-7);
+    const recentSnap = await db.collection('admissions').where('createdAt', '>=', firebase.firestore.Timestamp.fromDate(seven)).get();
+    statRecent.textContent = recentSnap.size;
+  }
+
+  // populate class filter from admissions
+  async function loadClasses() {
+    classesSet.clear();
+    const snap = await db.collection('admissions').get();
+    snap.forEach(doc => {
+      const d = doc.data();
+      if(d.sclass) classesSet.add(d.sclass);
+    });
+    // rebuild select
+    classFilter.innerHTML = '<option value=\"\">All classes</option>';
+    Array.from(classesSet).sort().forEach(c => {
+      const opt = document.createElement('option'); opt.value = c; opt.textContent = c;
+      classFilter.appendChild(opt);
+    });
+  }
+
+  // render table rows
+  function renderRows(docs) {
+    tbody.innerHTML = '';
+    fetchedDocs = []; // reset
+    let i = (pageNum - 1) * pageSize;
+    docs.forEach((doc) => {
+      i++;
+      const d = doc.data();
+      fetchedDocs.push({ id: doc.id, data: d });
+      const tr = document.createElement('tr');
+      const created = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toLocaleString() : '';
+      tr.innerHTML = `<td>${i}</td>
+        <td>${esc(d.name||'')}</td>
+        <td>${esc(d.phone||'')}</td>
+        <td>${esc(d.sclass||'')}</td>
+        <td class="muted">${esc(created)}</td>
+        <td class="table-actions">
+          <button class="btn-gray" onclick="viewForm('${doc.id}')">View</button>
+          <button class="btn-gray" onclick="promoteUserPrompt('${doc.id}')">Promote User</button>
+          <button class="btn-red" onclick="deleteAdmission('${doc.id}')">Delete</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+    resultCount.textContent = docs.length;
+    pageNumEl.textContent = pageNum;
+  }
+
+  // main query builder — naive client-side pagination (fetch limited, fallback)
+  async function loadAdmissions() {
+    pageSize = Number(document.getElementById('pageSize').value) || 10;
+    const qText = qSearch.value.trim().toLowerCase();
+    const cls = classFilter.value;
+    const order = sortBy.value;
+
+    // For simplicity and reliability with Firestore rules, we fetch a reasonable limit and then filter client-side.
+    // If your data grows huge, implement server-side paging with cursors.
+    const limit = 500; // safety cap
+    const snap = await db.collection('admissions').orderBy('createdAt','desc').limit(limit).get();
+    let docs = snap.docs || [];
+    // apply simple filters
+    if (cls) docs = docs.filter(d => (d.data().sclass||'').toLowerCase() === cls.toLowerCase());
+    if (qText) {
+      docs = docs.filter(d => {
+        const dd = d.data();
+        return (dd.name||'').toLowerCase().includes(qText) || (dd.phone||'').toLowerCase().includes(qText) || (dd.sclass||'').toLowerCase().includes(qText);
       });
     }
-    function openEdit(id){ localStorage.setItem('loadStudentFirestore', JSON.stringify({id})); location.href='admissionform (1).html'; }
-    async function deleteRec(id){ if(!confirm('Delete?')) return; await db.collection('admissions').doc(id).delete(); alert('Deleted'); loadAll(); }
+    // sort
+    if(order === 'createdAt_asc') docs = docs.reverse();
 
-    document.getElementById('doSearch').onclick = ()=>loadAll(document.getElementById('search').value);
-    document.getElementById('logout').onclick = ()=>auth.signOut().then(()=>location.href='loginform.html');
-    auth.onAuthStateChanged(u => { if(!u) location.href='loginform.html'; else loadAll(); });
+    // paging (client-side)
+    const start = (pageNum - 1) * pageSize;
+    const pageDocs = docs.slice(start, start + pageSize);
+
+    renderRows(pageDocs.map(x => x)); // pageDocs are doc objects already
+    // also refresh charts
+    buildCharts(docs);
+  }
+
+  // actions
+  window.viewForm = async function(id) {
+    // open admission form in edit mode — fetch doc and store in localStorage
+    const doc = await db.collection('admissions').doc(id).get();
+    if (!doc.exists) return alert('Not found');
+    localStorage.setItem('loadStudentFirestore', JSON.stringify({ id: doc.id, data: doc.data() }));
+    window.open('admissionform (1).html', '_blank');
+  };
+
+  window.deleteAdmission = async function(id) {
+    if(!confirm('Delete this admission permanently?')) return;
+    await db.collection('admissions').doc(id).delete();
+    alert('Deleted');
+    await refreshAll();
+  };
+
+  // Promote user: find by phone or create user doc (simple)
+  window.promoteUserPrompt = async function(admissionId) {
+    // get admission doc to locate phone/email
+    const doc = await db.collection('admissions').doc(admissionId).get();
+    if(!doc.exists) return alert('Admission not found');
+    const d = doc.data();
+    const phone = d.phone || '';
+    const email = d.email || '';
+    const username = prompt('Enter username for this user (e.g., teacher name):', d.name || '');
+    if(username === null) return; // cancelled
+    const role = prompt('Role to assign (admin / teacher / student):', 'teacher');
+    if(!role) return;
+    // create or update a users/{uid-like} doc — since we do not have auth UID for this person, create a user doc keyed by email or phone
+    // NOTE: In real app, you should use auth.createUser (server-side) or invite flow. This is a simple admin-managed mapping.
+    const key = (email || phone || ('tmp_' + Date.now())).replace(/[.#$[\]]/g, '_');
+    await db.collection('users').doc(key).set({
+      username, email: email || null, phone: phone || null, role: role, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    alert('User promoted/created with doc id: ' + key);
+  };
+
+  // CSV export
+  document.getElementById('exportCsv').addEventListener('click', () => {
+    if(!fetchedDocs.length) return alert('No data to export');
+    const rows = fetchedDocs.map((r, idx) => {
+      const d = r.data;
+      return {
+        '#': idx+1,
+        id: r.id,
+        name: d.name || '',
+        phone: d.phone || '',
+        class: d.sclass || '',
+        createdAt: d.createdAt && d.createdAt.toDate ? d.createdAt.toDate().toISOString() : ''
+      };
+    });
+    const header = Object.keys(rows[0]).join(',') + '\\n';
+    const csv = header + rows.map(r => Object.values(r).map(v => '\"' + String(v).replace(/\"/g,'\"\"') + '\"').join(',')).join('\\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'admissions_export.csv'; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // Refresh
+  async function refreshAll() {
+    await loadStats();
+    await loadClasses();
+    await loadAdmissions();
+  }
+
+  document.getElementById('refreshBtn').addEventListener('click', refreshAll);
+  document.getElementById('doSearch').addEventListener('click', ()=>{ pageNum = 1; loadAdmissions(); });
+  document.getElementById('nextPage').addEventListener('click', ()=>{ pageNum++; loadAdmissions(); });
+  document.getElementById('prevPage').addEventListener('click', ()=>{ if(pageNum>1) pageNum--; loadAdmissions(); });
+  document.getElementById('pageSize').addEventListener('change', ()=>{ pageNum=1; loadAdmissions(); });
+  document.getElementById('goToSite').addEventListener('click', ()=> window.open(window.location.origin, '_blank'));
+  document.getElementById('logoutBtn').addEventListener('click', ()=> firebase.auth().signOut().then(()=> location.href='loginform.html'));
+  document.getElementById('createUserBtn').addEventListener('click', async ()=>{
+    const username = prompt('username:');
+    if(!username) return;
+    const email = prompt('email (optional):');
+    const role = prompt('role (admin/teacher/student):', 'teacher');
+    // create doc keyed by email or username
+    const key = (email || username + '_' + Date.now()).replace(/[.#$[\\]]/g,'_');
+    await db.collection('users').doc(key).set({ username, email: email||null, role, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    alert('User created: ' + key);
+    await refreshAll();
+  });
+
+  // build charts (simple client-side aggregation)
+  function buildCharts(allDocs) {
+    try {
+      // admissions by class
+      const counts = {};
+      allDocs.forEach(d => {
+        const cls = (d.data().sclass || 'Unknown');
+        counts[cls] = (counts[cls]||0) + 1;
+      });
+      const labels = Object.keys(counts).sort();
+      const data = labels.map(l=>counts[l]);
+
+      if(chartClasses) chartClasses.destroy();
+      const ctx = document.getElementById('chartClasses').getContext('2d');
+      chartClasses = new Chart(ctx, {
+        type:'bar',
+        data:{ labels, datasets:[{ label:'Admissions', data, backgroundColor:'rgba(11,122,62,0.8)' }] },
+        options:{ responsive:true, maintainAspectRatio:false }
+      });
+
+      // marks overview from progress collection — compute latest finalPercent per student
+      db.collection('progress').orderBy('createdAt','desc').limit(500).get().then(snap=>{
+        const latest = {}; // latest per studentName
+        snap.forEach(doc=>{
+          const d = doc.data();
+          if(!d.studentName) return;
+          if(!latest[d.studentName]) latest[d.studentName] = d.finalPercent || 0;
+        });
+        const topNames = Object.keys(latest).slice(0,8);
+        const marks = topNames.map(n => latest[n]);
+        if(chartMarks) chartMarks.destroy();
+        const ctx2 = document.getElementById('chartMarks').getContext('2d');
+        chartMarks = new Chart(ctx2, {
+          type:'line',
+          data:{ labels: topNames, datasets:[{ label:'Final %', data: marks, borderColor:'rgba(11,122,62,0.9)', tension:0.3 }] },
+          options:{ responsive:true, maintainAspectRatio:false, scales:{ y:{ beginAtZero:true, max:100 } } }
+        });
+      });
+
+    } catch(e){ console.error(e); }
+  }
+
+  // init
+  (async function init(){
+    // require auth
+    firebase.auth().onAuthStateChanged(async user => {
+      if(!user) return location.href = 'loginform.html';
+      currentUser = user;
+      // ensure admin role
+      const ud = await db.collection('users').doc(user.uid).get();
+      if(!ud.exists || ud.data().role !== 'admin') {
+        alert('Admin only');
+        return location.href = 'students.html';
+      }
+      // load
+      await refreshAll();
+    });
+  })();
   </script>
 </body>
 </html>
